@@ -145,7 +145,9 @@ volatile uint16_t MODBUS_RTU_Valor_Registrador = 0;
 uint8_t LED = 0;
 
 uint8_t flagI2C = 0;
+uint8_t falhaI2C = 0;
 
+volatile uint8_t contadorFlagI2C = 0;
 volatile uint8_t ContadorErroModbus = 0;
 volatile uint8_t ContadorInterrupcaoUsartModbus = 0;
 volatile uint8_t TemporizadorInterrupcaoUsartModbus = 0;
@@ -171,6 +173,7 @@ enum _Enderecos_Discrete_Inputs
 	Alarme10,
 	Alarme11,
 	Alarme12,
+	Falha_I2C,
 
 	Quantidade_Discrete_Inputs = 16
 }Enderecos_Discrete_Inputs;
@@ -655,7 +658,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim == &htim3)
 	{
-		flagI2C = 1;
+		if (flagI2C == 0)
+		{
+			contadorFlagI2C++;
+		}
+
+		if (contadorFlagI2C >= 100)
+		{
+			flagI2C = 1;
+		}
 
 		if (Bit.M_LED_Erro == 1)
 		{
@@ -732,22 +743,48 @@ int main(void)
 
 	  if (flagI2C == 1)
 	  {
-		  ReadData(rxDataValue, sizeof(rxDataValue));
-		  Input_Registers[0] = ((uint16_t)rxDataValue[1] << 8) | rxDataValue[0];
+		  falhaI2C = ReadData(rxDataValue, sizeof(rxDataValue));
 
-		  Discrete_Inputs[0] = GET_Bit(rxDataValue[0], 0);
-		  Discrete_Inputs[1] = GET_Bit(rxDataValue[0], 1);
-		  Discrete_Inputs[2] = GET_Bit(rxDataValue[0], 2);
-		  Discrete_Inputs[3] = GET_Bit(rxDataValue[0], 3);
-		  Discrete_Inputs[4] = GET_Bit(rxDataValue[0], 4);
-		  Discrete_Inputs[5] = GET_Bit(rxDataValue[0], 5);
-		  Discrete_Inputs[6] = GET_Bit(rxDataValue[0], 6);
-		  Discrete_Inputs[7] = GET_Bit(rxDataValue[0], 7);
-		  Discrete_Inputs[8] = GET_Bit(rxDataValue[1], 0);
-		  Discrete_Inputs[9] = GET_Bit(rxDataValue[1], 1);
-		  Discrete_Inputs[10] = GET_Bit(rxDataValue[1], 2);
-		  Discrete_Inputs[11] = GET_Bit(rxDataValue[1], 3);
-		  flagI2C = 0;
+	      if (falhaI2C == 0)
+	      {
+	          // Só atualiza os registradores Modbus se a leitura I2C foi um sucesso!
+	          Input_Registers[0] = ((uint16_t)rxDataValue[1] << 8) | rxDataValue[0];
+
+			  Discrete_Inputs[0] = GET_Bit(rxDataValue[0], 0);
+			  Discrete_Inputs[1] = GET_Bit(rxDataValue[0], 1);
+			  Discrete_Inputs[2] = GET_Bit(rxDataValue[0], 2);
+			  Discrete_Inputs[3] = GET_Bit(rxDataValue[0], 3);
+			  Discrete_Inputs[4] = GET_Bit(rxDataValue[0], 4);
+			  Discrete_Inputs[5] = GET_Bit(rxDataValue[0], 5);
+			  Discrete_Inputs[6] = GET_Bit(rxDataValue[0], 6);
+			  Discrete_Inputs[7] = GET_Bit(rxDataValue[0], 7);
+			  Discrete_Inputs[8] = GET_Bit(rxDataValue[1], 0);
+			  Discrete_Inputs[9] = GET_Bit(rxDataValue[1], 1);
+			  Discrete_Inputs[10] = GET_Bit(rxDataValue[1], 2);
+			  Discrete_Inputs[11] = GET_Bit(rxDataValue[1], 3);
+			  Discrete_Inputs[Falha_I2C] = 0;
+	      }
+	      else
+	      {
+	    	  // Falha na leitura!
+			  // 1. Zera os registradores para o supervisor Modbus saber que o sensor caiu
+	    	  Discrete_Inputs[Falha_I2C] = 1;
+
+			  // 2. TENTATIVA DE RECUPERAÇÃO DO HARDWARE I2C
+			  // Verifica se o periférico I2C ficou preso/travado
+			  if (HAL_I2C_GetState(&hi2c1) != HAL_I2C_STATE_READY)
+			  {
+				  // Desinicializa o periférico I2C (libera os pinos e reseta o hardware interno)
+				  HAL_I2C_DeInit(&hi2c1);
+
+				  // Dá um pequeno tempo para as linhas físicas relaxarem (pull-ups agirem)
+				  HAL_Delay(2);
+
+				  // Chama a função de inicialização padrão gerada pelo CubeMX para reviver o I2C
+				  MX_I2C1_Init();
+			  }
+	      }
+	      flagI2C = 0;
 	  }
 
 		if (!__HAL_UART_GET_IT_SOURCE(&MODBUS_RTU_USART, UART_IT_RXNE))

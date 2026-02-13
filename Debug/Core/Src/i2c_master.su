@@ -1,2 +1,0 @@
-../Core/Src/i2c_master.c:23:6:WriteData	24	static
-../Core/Src/i2c_master.c:30:6:ReadData	24	static

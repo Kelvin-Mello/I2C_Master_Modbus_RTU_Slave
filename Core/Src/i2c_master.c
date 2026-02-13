@@ -20,16 +20,30 @@ uint8_t rxDataMaster[SIZE];
 
 uint16_t devAddress = SLAVE_ADDRESS << 1;
 
-void WriteData(uint8_t *pdata, uint8_t len)
+uint8_t WriteData(uint8_t *pdata, uint8_t len)
 {
 	memcpy(&txDataMaster[0], pdata, len);
 
-	HAL_I2C_Master_Transmit(&hi2c1, devAddress, txDataMaster, len, 100);
+	if (HAL_I2C_Master_Transmit(&hi2c1, devAddress, txDataMaster, len, 100) == HAL_OK)
+	{
+		return 0;
+	}
+	else
+	{
+		return 1;
+	}
 }
 
-void ReadData(uint8_t *pdata, uint8_t len)
+uint8_t ReadData(uint8_t *pdata, uint8_t len)
 {
-	HAL_I2C_Master_Receive(&hi2c1, devAddress, pdata, len, 100);
+	 if (HAL_I2C_Master_Receive(&hi2c1, devAddress, pdata, len, 100) == HAL_OK)
+	 {
+		 return 0;
+	 }
+	 else
+	 {
+		 return 1;
+	 }
 
 //	memcpy(&rxDataMaster[0], pdata, len);
 }
